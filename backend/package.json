@@ -1,0 +1,27 @@
+{
+    "name": "smart-computers-backend",
+    "version": "1.0.0",
+    "description": "Express + MongoDB API for Smart Computer Education Society",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js",
+        "dev": "nodemon server.js"
+    },
+    "engines": { "node": ">=18" },
+    "dependencies": {
+        "bcryptjs": "^2.4.3",
+        "cloudinary": "^2.10.0",
+        "cors": "^2.8.6",
+        "csv-parser": "^3.0.0",
+        "dotenv": "^16.6.1",
+        "express": "^4.22.2",
+        "jsonwebtoken": "^9.0.3",
+        "mongoose": "^8.24.1",
+        "multer": "^2.1.1",
+        "pdf-lib": "^1.17.1",
+        "qrcode": "^1.5.4"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.4"
+    }
+}

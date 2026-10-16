@@ -1,0 +1,43 @@
+# Render Blueprint - deploys the API (backend). The website (frontend) goes on Vercel.
+# Render: New -> Blueprint -> connect your GitHub repo. Secrets marked sync:false are typed in the dashboard.
+services:
+  - type: web
+    name: smart-computers-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: FRONTEND_URL
+        sync: false          # your Vercel URL, e.g. https://smart-computers.vercel.app
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+  # ---- OPTIONAL: host the frontend on Render too (instead of Vercel). Uncomment to use. ----
+  # - type: web
+  #   name: smart-computers-frontend
+  #   runtime: static
+  #   rootDir: frontend
+  #   buildCommand: npm install && npm run build
+  #   staticPublishPath: dist
+  #   routes:
+  #     - type: rewrite
+  #       source: /*
+  #       destination: /index.html
+  #   envVars:
+  #     - key: VITE_API_URL
+  #       sync: false        # https://smart-computers-backend.onrender.com
