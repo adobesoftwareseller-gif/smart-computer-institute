@@ -26,6 +26,13 @@ function verifyBase() {
 const verifyUrlFor = (id) => `${verifyBase()}?id=${encodeURIComponent(id)}`;
 const newCertId = () => `SCES-${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`;
 
+// Cloudinary URL ko "download" mode me badalta hai (fl_attachment)
+const toDownloadUrl = (url, certId) => {
+    if (!url || !url.includes('/upload/')) return url;
+    const name = String(certId).replace(/[^\w-]/g, '_');
+    return url.replace('/upload/', `/upload/fl_attachment:${name}/`);
+};
+
 // ---------- Public: verify ----------
 // GET /api/certificates/verify?rollNumber=XXX   or   ?id=CERTIFICATE_ID
 router.get('/verify', async (req, res) => {
@@ -59,12 +66,21 @@ router.get('/verify', async (req, res) => {
     }
 });
 
-// ---------- Public: generated PDF ----------
+// ---------- Public: download ----------
 // GET /api/certificates/:id/pdf
+// Agar original certificate upload hua hai to wahi download hoga,
+// warna details se generated PDF (fallback).
 router.get('/:id/pdf', async (req, res) => {
     try {
         const c = await Certificate.findById(req.params.id);
         if (!c || c.isValid === false) return res.status(404).send('Certificate not found');
+
+        // Original uploaded certificate
+        if (c.certificateFileUrl) {
+            return res.redirect(toDownloadUrl(c.certificateFileUrl, c.certificateId));
+        }
+
+        // ---- Fallback: generated PDF (sirf jab file upload nahi hui) ----
         const site = await SiteSetting.findOne({ key: 'site' }).lean();
         const orgName = (site && site.siteName) || 'Smart Computer Education Society';
 
