@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import api, { API_URL, errMsg } from '../api.js';
 import MediaField from './MediaField.jsx';
 
-const EMPTY = { certificateId: '', rollNumber: '', studentName: '', fatherName: '', courseName: '', issueDate: '', grade: '', duration: '', certificateFileUrl: '' };
+const EMPTY = { certificateId: '', rollNumber: '', studentName: '', fatherName: '', courseName: '', admissionDate: '', issueDate: '', grade: '', duration: '', certificateFileUrl: '' };
 
 export default function AdminCertificates() {
     const [list, setList] = useState([]);
@@ -52,6 +52,7 @@ export default function AdminCertificates() {
         setForm({
             certificateId: c.certificateId, rollNumber: c.rollNumber, studentName: c.studentName, fatherName: c.fatherName || '',
             courseName: c.courseName,
+            admissionDate: c.admissionDate ? String(c.admissionDate).slice(0, 10) : '',
             issueDate: c.issueDate ? String(c.issueDate).slice(0, 10) : '', grade: c.grade || '', duration: c.duration || '',
             certificateFileUrl: c.certificateFileUrl || '',
         });
@@ -102,6 +103,7 @@ export default function AdminCertificates() {
                     <div><label>Student name *</label><input value={form.studentName} onChange={(e) => set('studentName', e.target.value)} required /></div>
                     <div><label>Father's name</label><input value={form.fatherName} onChange={(e) => set('fatherName', e.target.value)} placeholder="S/O, D/O, W/O" /></div>
                     <div><label>Course name *</label><input value={form.courseName} onChange={(e) => set('courseName', e.target.value)} required /></div>
+                    <div><label>Admission date</label><input type="date" value={form.admissionDate} onChange={(e) => set('admissionDate', e.target.value)} /></div>
                     <div><label>Issue date *</label><input type="date" value={form.issueDate} onChange={(e) => set('issueDate', e.target.value)} required /></div>
                     <div><label>Grade</label><input value={form.grade} onChange={(e) => set('grade', e.target.value)} placeholder="A+" /></div>
                     <div><label>Duration</label><input value={form.duration} onChange={(e) => set('duration', e.target.value)} placeholder="6 months" /></div>
@@ -127,7 +129,7 @@ export default function AdminCertificates() {
             <div className="admin-form">
                 <h3>Bulk import (CSV)</h3>
                 <p className="muted" style={{ marginTop: 0 }}>
-                    Columns: <code>certificateId,rollNumber,studentName,fatherName,courseName,issueDate,grade,duration</code> — certificateId and fatherName can be empty. issueDate like 2025-11-20. Existing IDs are updated.
+                    Columns: <code>certificateId,rollNumber,studentName,fatherName,courseName,admissionDate,issueDate,grade,duration</code> — certificateId, fatherName and admissionDate can be empty. Dates like 2025-11-20. Existing IDs are updated.
                 </p>
                 <input type="file" accept=".csv,text/csv" onChange={(e) => setCsv(e.target.files?.[0] || null)} />
                 <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
@@ -158,21 +160,3 @@ export default function AdminCertificates() {
                             <div style={{ minWidth: 0 }}>
                                 <strong>{c.studentName}</strong>
                                 {c.fatherName ? <span className="muted"> · S/O {c.fatherName}</span> : null}
-                                <span className="muted"> · Roll {c.rollNumber}</span>
-                                <div className="muted" style={{ fontSize: 13 }}>{c.courseName}{c.grade ? ` · Grade ${c.grade}` : ''}{c.duration ? ` · ${c.duration}` : ''}</div>
-                                <div className="muted" style={{ fontSize: 12 }}>ID {c.certificateId} · {new Date(c.issueDate).toLocaleDateString('en-GB')} · {c.isValid === false ? '⛔ Revoked' : '✅ Valid'}</div>
-                            </div>
-                            <div className="form-actions" style={{ marginTop: 0 }}>
-                                <a href={`${API_URL}/certificates/${c._id}/pdf`} target="_blank" rel="noreferrer"><button type="button">PDF</button></a>
-                                <button onClick={() => edit(c)}>Edit</button>
-                                <button onClick={() => toggleValid(c)}>{c.isValid === false ? 'Restore' : 'Revoke'}</button>
-                                <button className="btn-danger" onClick={() => remove(c)}>Delete</button>
-                            </div>
-                        </div>
-                    </div>
-                ))}
-                {list.length === 0 && <p className="muted">No certificates found.</p>}
-            </div>
-        </div>
-    );
-}

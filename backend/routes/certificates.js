@@ -13,7 +13,7 @@ const router = express.Router();
 const csvUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 const CERT_FIELDS = [
-    'certificateId', 'rollNumber', 'studentName', 'courseName', 'issueDate',
+    'certificateId', 'rollNumber', 'studentName', 'fatherName', 'courseName', 'admissionDate', 'issueDate',
     'grade', 'duration', 'certificateFileUrl', 'isValid',
 ];
 const CERT_EDIT_FIELDS = CERT_FIELDS.filter((f) => f !== 'certificateId');
@@ -31,6 +31,12 @@ const toDownloadUrl = (url, certId) => {
     if (!url || !url.includes('/upload/')) return url;
     const name = String(certId).replace(/[^\w-]/g, '_');
     return url.replace('/upload/', `/upload/fl_attachment:${name}/`);
+};
+
+// Khali admissionDate ("") ko hata deta hai taaki Mongoose date error na de
+const cleanDates = (data) => {
+    if (data.admissionDate === '' || data.admissionDate === null) delete data.admissionDate;
+    return data;
 };
 
 // ---------- Public: verify ----------
@@ -53,8 +59,10 @@ router.get('/verify', async (req, res) => {
                 _id: c._id,
                 certificateId: c.certificateId,
                 studentName: c.studentName,
+                fatherName: c.fatherName || '',
                 rollNumber: c.rollNumber,
                 courseName: c.courseName,
+                admissionDate: c.admissionDate || null,
                 issueDate: c.issueDate,
                 grade: c.grade,
                 duration: c.duration,
@@ -101,17 +109,20 @@ router.get('/:id/pdf', async (req, res) => {
             const t = safe(text);
             page.drawText(t, { x: (width - font.widthOfTextAtSize(t, size)) / 2, y, size, font, color });
         };
+        const fmt = (d) => new Date(d).toLocaleDateString('en-GB');
 
         center(orgName, height - 90, serif, 22, dark);
         center('Certificate of Completion', height - 125, regular, 14, gold);
         center('This is to certify that', height - 190, regular, 13);
         center(c.studentName, height - 225, serif, 26, dark);
-        center(`has successfully completed the course "${c.courseName}"`, height - 265, regular, 13);
-        if (c.duration) center(`Duration: ${c.duration}`, height - 290, regular, 12);
-        center(`Roll Number: ${c.rollNumber}   |   Certificate ID: ${c.certificateId}`, height - 330, regular, 11);
+        if (c.fatherName) center(`S/O, D/O, W/O: ${c.fatherName}`, height - 248, regular, 12);
+        center(`has successfully completed the course "${c.courseName}"`, height - 275, regular, 13);
+        if (c.duration) center(`Duration: ${c.duration}`, height - 298, regular, 12);
+        center(`Roll Number: ${c.rollNumber}   |   Certificate ID: ${c.certificateId}`, height - 335, regular, 11);
+        if (c.admissionDate) center(`Admission Date: ${fmt(c.admissionDate)}`, height - 355, regular, 11);
         center(
-            `Issue Date: ${new Date(c.issueDate).toLocaleDateString('en-GB')}${c.grade ? '   |   Grade: ' + c.grade : ''}`,
-            height - 350, regular, 11
+            `Issue Date: ${fmt(c.issueDate)}${c.grade ? '   |   Grade: ' + c.grade : ''}`,
+            height - 375, regular, 11
         );
         center(`Verify this certificate at: ${c.verificationUrl || verifyUrlFor(c.certificateId)}`, 70, regular, 9, rgb(0.4, 0.35, 0.32));
 
@@ -132,7 +143,14 @@ router.get('/', requireAdmin, async (req, res) => {
     try {
         const search = escapeRegex(req.query.search || '');
         const query = search
-            ? { $or: [{ rollNumber: new RegExp(search, 'i') }, { studentName: new RegExp(search, 'i') }, { certificateId: new RegExp(search, 'i') }] }
+            ? {
+                $or: [
+                    { rollNumber: new RegExp(search, 'i') },
+                    { studentName: new RegExp(search, 'i') },
+                    { fatherName: new RegExp(search, 'i') },
+                    { certificateId: new RegExp(search, 'i') },
+                ],
+            }
             : {};
         const certificates = await Certificate.find(query).sort({ createdAt: -1 }).limit(300);
         res.json({ certificates });
@@ -143,95 +161,7 @@ router.get('/', requireAdmin, async (req, res) => {
 
 router.post('/', requireAdmin, async (req, res) => {
     try {
-        const data = pick(req.body, CERT_FIELDS);
+        const data = cleanDates(pick(req.body, CERT_FIELDS));
         if (!data.certificateId || !String(data.certificateId).trim()) data.certificateId = newCertId();
         data.certificateId = String(data.certificateId).trim();
         const verificationUrl = verifyUrlFor(data.certificateId);
-        const qrCodeUrl = await QRCode.toDataURL(verificationUrl);
-        const certificate = await Certificate.create({ ...data, verificationUrl, qrCodeUrl });
-        res.status(201).json({ certificate });
-    } catch (e) {
-        const dup = e && e.code === 11000;
-        res.status(dup ? 409 : 400).json({ error: dup ? 'This certificate ID already exists' : (e.message || 'Failed to create certificate') });
-    }
-});
-
-router.patch('/:id', requireAdmin, async (req, res) => {
-    try {
-        const certificate = await Certificate.findByIdAndUpdate(req.params.id, pick(req.body, CERT_EDIT_FIELDS), { new: true, runValidators: true });
-        if (!certificate) return res.status(404).json({ error: 'Not found' });
-        res.json({ certificate });
-    } catch (e) {
-        res.status(400).json({ error: 'Failed to update certificate' });
-    }
-});
-
-router.delete('/:id', requireAdmin, async (req, res) => {
-    try {
-        const c = await Certificate.findByIdAndDelete(req.params.id);
-        if (!c) return res.status(404).json({ error: 'Not found' });
-        res.json({ success: true });
-    } catch (e) {
-        res.status(400).json({ error: 'Failed to delete certificate' });
-    }
-});
-
-// Bulk CSV import. Columns: certificateId,rollNumber,studentName,courseName,issueDate,grade,duration
-// (certificateId may be empty -> auto generated). Existing certificateIds are updated.
-router.post('/import', requireAdmin, (req, res) => {
-    csvUpload.single('file')(req, res, async (uploadErr) => {
-        if (uploadErr) return res.status(400).json({ error: 'CSV upload failed (max 5 MB)' });
-        if (!req.file) return res.status(400).json({ error: 'No CSV file provided' });
-        try {
-            const rows = [];
-            await new Promise((resolve, reject) => {
-                Readable.from(req.file.buffer)
-                    .pipe(csv({ mapHeaders: ({ header }) => header.replace(/^\uFEFF/, '').trim() }))
-                    .on('data', (r) => rows.push(r))
-                    .on('end', resolve)
-                    .on('error', reject);
-            });
-            if (!rows.length) return res.status(400).json({ error: 'CSV has no rows' });
-            if (rows.length > 5000) return res.status(400).json({ error: 'Max 5000 rows per import' });
-
-            let success = 0;
-            const failed = [];
-            for (const [i, row] of rows.entries()) {
-                const id = (row.certificateId || '').trim() || newCertId();
-                try {
-                    const issueDate = new Date(row.issueDate);
-                    if (!row.rollNumber || !row.studentName || !row.courseName || isNaN(issueDate)) {
-                        throw new Error('Missing/invalid rollNumber, studentName, courseName or issueDate');
-                    }
-                    const verificationUrl = verifyUrlFor(id);
-                    const qrCodeUrl = await QRCode.toDataURL(verificationUrl);
-                    await Certificate.findOneAndUpdate(
-                        { certificateId: id },
-                        {
-                            certificateId: id,
-                            rollNumber: row.rollNumber.trim(),
-                            studentName: row.studentName.trim(),
-                            courseName: row.courseName.trim(),
-                            issueDate,
-                            grade: (row.grade || '').trim(),
-                            duration: (row.duration || '').trim(),
-                            qrCodeUrl,
-                            verificationUrl,
-                            isValid: true,
-                            importedInBulk: true,
-                        },
-                        { upsert: true, new: true }
-                    );
-                    success++;
-                } catch (e) {
-                    failed.push({ row: i + 2, certificateId: id, error: e.message });
-                }
-            }
-            res.json({ total: rows.length, success, failedCount: failed.length, failed: failed.slice(0, 20) });
-        } catch (e) {
-            res.status(400).json({ error: 'Could not read the CSV file' });
-        }
-    });
-});
-
-module.exports = router;

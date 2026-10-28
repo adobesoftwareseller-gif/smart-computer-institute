@@ -7,6 +7,7 @@ const CertificateSchema = new mongoose.Schema(
         studentName: { type: String, required: true, trim: true },
         fatherName: { type: String, default: '', trim: true },
         courseName: { type: String, required: true, trim: true },
+        admissionDate: { type: Date },
         issueDate: { type: Date, required: true },
         grade: { type: String, default: '' },
         duration: { type: String, default: '' },
