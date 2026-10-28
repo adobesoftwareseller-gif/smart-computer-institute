@@ -160,3 +160,26 @@ export default function AdminCertificates() {
                             <div style={{ minWidth: 0 }}>
                                 <strong>{c.studentName}</strong>
                                 {c.fatherName ? <span className="muted"> · S/O {c.fatherName}</span> : null}
+                                <span className="muted"> · Roll {c.rollNumber}</span>
+                                <div className="muted" style={{ fontSize: 13 }}>{c.courseName}{c.grade ? ` · Grade ${c.grade}` : ''}{c.duration ? ` · ${c.duration}` : ''}</div>
+                                <div className="muted" style={{ fontSize: 12 }}>
+                                    ID {c.certificateId}
+                                    {c.admissionDate ? ` · Admission ${new Date(c.admissionDate).toLocaleDateString('en-GB')}` : ''}
+                                    {' · Issue '}{new Date(c.issueDate).toLocaleDateString('en-GB')}
+                                    {' · '}{c.isValid === false ? '⛔ Revoked' : '✅ Valid'}
+                                </div>
+                            </div>
+                            <div className="form-actions" style={{ marginTop: 0 }}>
+                                <a href={`${API_URL}/certificates/${c._id}/pdf`} target="_blank" rel="noreferrer"><button type="button">PDF</button></a>
+                                <button onClick={() => edit(c)}>Edit</button>
+                                <button onClick={() => toggleValid(c)}>{c.isValid === false ? 'Restore' : 'Revoke'}</button>
+                                <button className="btn-danger" onClick={() => remove(c)}>Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                {list.length === 0 && <p className="muted">No certificates found.</p>}
+            </div>
+        </div>
+    );
+}
